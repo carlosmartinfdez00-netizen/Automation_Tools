@@ -6,8 +6,8 @@
 # =========================================================
 #
 # Descripción:
-# Herramienta para CTF/laboratorios que intenta escalar
-# privilegios cuando el usuario pertenece al grupo docker.
+# Herramienta para escalar privilegios cuando el usuario 
+# pertenece al grupo docker.
 #
 # Uso:
 # chmod +x docker2root
